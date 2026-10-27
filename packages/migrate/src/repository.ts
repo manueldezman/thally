@@ -4432,9 +4432,13 @@ interface DocusaurusProjectName {
 
 /** The source's own package name, without a scope that names the publisher. */
 function sourcePackageName(repositoryDir: string): string | undefined {
-  const path = resolveWithin(repositoryDir, 'package.json')
-  if (!existsSync(path)) return undefined
   try {
+    // Package metadata is untrusted source input too: a symlink must not turn
+    // the branding fallback into a read outside the checkout, and a special or
+    // oversized file must not block or exhaust a migration.
+    const path = withinRealRoot(resolveWithin(repositoryDir, 'package.json'), repositoryDir)
+    const metadata = lstatSync(path)
+    if (!metadata.isFile() || metadata.size > MAX_PAGE_BYTES) return undefined
     const parsed = JSON.parse(readFileSync(path, 'utf8')) as { name?: unknown }
     if (typeof parsed.name !== 'string') return undefined
     return parsed.name.split('/').pop()?.trim() || undefined
