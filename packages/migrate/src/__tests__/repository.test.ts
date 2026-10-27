@@ -4151,6 +4151,42 @@ describe('Docusaurus repository migration', () => {
     expect(messages.filter((message) => message.includes('project name was taken from'))).toHaveLength(1)
   })
 
+  it('never reads a fallback package name through a symlink outside the repository', () => {
+    const root = docusaurusFixture()
+    const outside = mkdtempSync(join(tmpdir(), 'thally-migrate-package-outside-'))
+    writeFileSync(join(outside, 'package.json'), JSON.stringify({ name: '@private/Outside Package' }))
+    symlinkSync(join(outside, 'package.json'), join(root, 'package.json'))
+    writeFileSync(join(root, 'docusaurus.config.ts'), `
+      export default {
+        presets: [['classic', { docs: { sidebarPath: './sidebars.ts' } }]],
+        title: process.env.SITE_TITLE,
+      }
+    `)
+
+    const bundle = migrateRepository({ repositoryDir: root, sourceUrl: 'https://github.com/acme/safe-docs', platform: 'docusaurus' })
+
+    expect(bundle.site?.name).toBe('safe-docs')
+    expect(JSON.stringify(bundle)).not.toContain('Outside Package')
+    expect(bundle.warnings.map((warning) => warning.message).join('\n')).toContain('source repository name')
+  })
+
+  it.each(['oversized', 'directory'])('ignores an %s package manifest when choosing a fallback name', (kind) => {
+    const root = docusaurusFixture()
+    if (kind === 'directory') mkdirSync(join(root, 'package.json'))
+    else writeFileSync(join(root, 'package.json'), JSON.stringify({ name: 'Oversized Package', padding: 'x'.repeat(2_000_000) }))
+    writeFileSync(join(root, 'docusaurus.config.ts'), `
+      export default {
+        presets: [['classic', { docs: { sidebarPath: './sidebars.ts' } }]],
+        title: process.env.SITE_TITLE,
+      }
+    `)
+
+    const bundle = migrateRepository({ repositoryDir: root, sourceUrl: 'https://github.com/acme/safe-docs', platform: 'docusaurus' })
+
+    expect(bundle.site?.name).toBe('safe-docs')
+    expect(bundle.warnings.map((warning) => warning.message).join('\n')).toContain('source repository name')
+  })
+
   it('falls back to the source repository name when the package has no name', () => {
     const root = docusaurusFixture()
     writeFileSync(join(root, 'docusaurus.config.ts'), `
