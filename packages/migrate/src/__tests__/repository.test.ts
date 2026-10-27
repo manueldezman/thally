@@ -3814,6 +3814,44 @@ describe('Docusaurus repository migration', () => {
     expect(bundle.site).toMatchObject({ name: 'Acme Docs', description: 'Ship faster.' })
   })
 
+  it('reads site identity from named exports behind a namespace import', () => {
+    const root = docusaurusFixture()
+    writeFileSync(join(root, 'brand.ts'), `
+      export const TITLE = 'Correct'
+      export const TAGLINE = 'Named tagline.'
+      export default { TITLE: 'Wrong', TAGLINE: 'Default tagline.' }
+    `)
+    writeFileSync(join(root, 'docusaurus.config.ts'), `
+      import * as site from './brand'
+      const config = {
+        presets: [['classic', { docs: { sidebarPath: './sidebars.ts' } }]],
+        title: site.TITLE,
+        tagline: site.default.TAGLINE,
+      }
+      export default config
+    `)
+    const bundle = migrateRepository({ repositoryDir: root, sourceUrl: 'https://github.com/acme/brand-docs', platform: 'docusaurus' })
+    expect(bundle.site).toMatchObject({ name: 'Correct', description: 'Default tagline.' })
+  })
+
+  it('ignores an imported module that leaves the repository through a symlink', () => {
+    const root = docusaurusFixture()
+    const outside = mkdtempSync(join(tmpdir(), 'thally-migrate-outside-'))
+    writeFileSync(join(outside, 'site.json'), JSON.stringify({ title: 'Outside Secret' }))
+    symlinkSync(outside, join(root, 'shared'), 'dir')
+    writeFileSync(join(root, 'docusaurus.config.ts'), `
+      import site from './shared/site.json'
+      const config = {
+        presets: [['classic', { docs: { sidebarPath: './sidebars.ts' } }]],
+        title: site.title,
+      }
+      export default config
+    `)
+    const bundle = migrateRepository({ repositoryDir: root, sourceUrl: 'https://github.com/acme/linked-docs', platform: 'docusaurus' })
+    expect(bundle.site?.name).toBe('linked-docs')
+    expect(bundle.warnings.map((warning) => warning.message).join('\n')).toContain('site title')
+  })
+
   it('falls back to the source package name and warns once per unreadable identity field', () => {
     const root = docusaurusFixture()
     writeFileSync(join(root, 'package.json'), JSON.stringify({ name: '@acme/docs-site' }))

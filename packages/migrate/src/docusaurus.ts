@@ -961,7 +961,7 @@ function staticModulePath(repositoryRoot: string, specifier: string): string | n
   try {
     const relativePath = specifier.replace(/^\.\/+/, '')
     return ['', '.ts', '.tsx', '.js', '.jsx', '.mjs', '.json']
-      .map((extension) => resolveWithin(repositoryRoot, `${relativePath}${extension}`))
+      .map((extension) => withinRealRoot(resolveWithin(repositoryRoot, `${relativePath}${extension}`), repositoryRoot))
       .find((candidate) => existsSync(candidate) && lstatSync(candidate).isFile()) ?? null
   } catch {
     return null
@@ -1049,6 +1049,37 @@ function staticImportBindings(source: string, repositoryRoot: string): Map<strin
     const value = namedExportStringText(readBoundedText(modulePath), exported)
     if (value !== undefined) bindings.set(local, value)
   }
+  // `import * as site` exposes every named export, with the default export
+  // reachable as `site.default`. Reading only the default object would answer
+  // `site.TITLE` with a default-object key instead of the named export.
+  const addNamespace = (local: string, specifier: string): void => {
+    const modulePath = staticModulePath(repositoryRoot, specifier)
+    if (!modulePath) return
+    const moduleSource = readBoundedText(modulePath)
+    if (extname(modulePath).toLowerCase() === '.json') {
+      // Bundlers synthesize named exports from a JSON module's top-level keys.
+      for (const [key, value] of staticObjectStrings(moduleSource)) {
+        bindings.set(`${local}.${key}`, value)
+      }
+      return
+    }
+    const defaultText = defaultExportObjectLiteralText(moduleSource)
+    if (defaultText) {
+      for (const [key, value] of staticObjectStrings(defaultText)) {
+        bindings.set(`${local}.default.${key}`, value)
+      }
+    }
+    for (const match of moduleSource.matchAll(/\bexport\s+(?:const|let|var)\s+([A-Za-z_$][\w$]*)\b/g)) {
+      const name = match[1]
+      const value = namedExportStringText(moduleSource, name)
+      if (value !== undefined) bindings.set(`${local}.${name}`, value)
+      const objectText = namedExportObjectLiteralText(moduleSource, name)
+      if (!objectText) continue
+      for (const [key, objectValue] of staticObjectStrings(objectText)) {
+        bindings.set(`${local}.${name}.${key}`, objectValue)
+      }
+    }
+  }
   // `import site from './site.json'`, and the default half of a mixed import.
   for (const match of source.matchAll(
     /\bimport\s+([A-Za-z_$][\w$]*)\s*(?:,\s*\{[^}]*\})?\s+from\s*(['"])([^'"]+)\2/g,
@@ -1059,7 +1090,7 @@ function staticImportBindings(source: string, repositoryRoot: string): Map<strin
   for (const match of source.matchAll(
     /\bimport\s+\*\s+as\s+([A-Za-z_$][\w$]*)\s+from\s*(['"])([^'"]+)\2/g,
   )) {
-    addObject(match[1], match[3], 'default')
+    addNamespace(match[1], match[3])
   }
   // `import { site, SITE_NAME as heading } from './site'`.
   for (const match of source.matchAll(/\bimport\s*\{([^}]*)\}\s*from\s*(['"])([^'"]+)\2/g)) {
