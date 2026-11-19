@@ -505,9 +505,13 @@ export async function middleware(request: NextRequest, event: NextFetchEvent) {
   if (isPotentialDocsPagePath(pathname)) {
     response.headers.append('Link', '</llms.txt>; rel="llms-txt"')
     // Standard relation types agents actually dereference (RFC 8288): the
-    // Markdown alternate of the corpus, the OpenAPI description
-    // (rel="service-desc", RFC 9727), and the API catalog (rel="api-catalog").
-    response.headers.append('Link', '</llms.txt>; rel="alternate"; type="text/markdown"')
+    // page Markdown mirror, the OpenAPI description (rel="service-desc",
+    // RFC 9727), and the API catalog (rel="api-catalog").
+    if (isMarkdownPagesEnabled(cloudAccess?.portable)) {
+      const pagePath = pathname.replace(/\/+$/, '') || '/'
+      const markdownPath = pagePath === '/' ? '/.md' : `${pagePath}.md`
+      response.headers.append('Link', `<${markdownPath}>; rel="alternate"; type="text/markdown"`)
+    }
     response.headers.append('Link', '</openapi.yaml>; rel="service-desc"; type="application/yaml"')
     response.headers.append('Link', '</.well-known/api-catalog>; rel="api-catalog"; type="application/linkset+json"')
     response.headers.set('X-Llms-Txt', `${request.nextUrl.origin}/llms.txt`)
