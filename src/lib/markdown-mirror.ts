@@ -21,9 +21,12 @@ export function markdownMirrorCandidates(pageId: string): Array<string> {
 /**
  * Render the public Markdown mirror. The frontmatter is deliberately limited
  * to the two fields an agent needs to identify and summarize the page. UI and
- * navigation keys stay out of the machine projection.
+ * navigation keys stay out of the machine projection. Every response starts
+ * with a pointer to the full documentation index.
  */
-export function renderMarkdownMirror(raw: string): string {
+export function renderMarkdownMirror(raw: string, origin: string): string {
+  const base = origin.replace(/\/+$/, '')
+  const pointer = `> For the full documentation index, see [llms.txt](${base}/llms.txt).\n\n`
   let data: Record<string, unknown>
   let body: string
   try {
@@ -32,11 +35,11 @@ export function renderMarkdownMirror(raw: string): string {
     body = parsed.content
   } catch {
     // Malformed frontmatter cannot be projected safely. Fall back to the body.
-    return mdxToMarkdown(raw)
+    return `${pointer}${mdxToMarkdown(raw)}`
   }
 
   const frontmatter: Record<string, unknown> = {}
   if (typeof data.title === 'string') frontmatter.title = data.title
   if (typeof data.description === 'string') frontmatter.description = data.description
-  return stringifyFrontmatter(mdxToMarkdown(body), frontmatter)
+  return stringifyFrontmatter(`${pointer}${mdxToMarkdown(body)}`, frontmatter)
 }

@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import { markdownMirrorCandidates, renderMarkdownMirror } from './markdown-mirror'
 
+const ORIGIN = 'https://docs.example.com'
+
 describe('renderMarkdownMirror', () => {
   it('keeps only title and description in the public frontmatter', () => {
     const raw = `---
@@ -19,10 +21,20 @@ verifiedVersion: 1.0
 Body text.
 `
 
-    const output = renderMarkdownMirror(raw)
+    const output = renderMarkdownMirror(raw, ORIGIN)
 
     expect(output).toContain('title: Quickstart')
     expect(output).toContain('description: Publish your first documentation site.')
+    expect(output).toContain(
+      '> For the full documentation index, see [llms.txt](https://docs.example.com/llms.txt).',
+    )
+    expect(output.startsWith('---\n')).toBe(true)
+    expect(output.indexOf('> For the full documentation index')).toBeGreaterThan(
+      output.indexOf('description:'),
+    )
+    expect(output.indexOf('> For the full documentation index')).toBeLessThan(
+      output.indexOf('Body text.'),
+    )
     expect(output).toContain('Body text.')
     expect(output).not.toContain('navTitle')
     expect(output).not.toContain('keywords')
@@ -41,7 +53,7 @@ description: "Use the API."
 Body.
 `
 
-    const output = renderMarkdownMirror(raw)
+    const output = renderMarkdownMirror(raw, ORIGIN)
 
     expect(output).toContain('title: "API: Overview"')
     expect(output).toContain('description: Use the API.')
@@ -55,7 +67,7 @@ description: Cards.
 <Card title="Quickstart" href="/quickstart" />
 `
 
-    const output = renderMarkdownMirror(raw)
+    const output = renderMarkdownMirror(raw, ORIGIN)
 
     expect(output).toContain('#### [Quickstart](/quickstart)')
   })
@@ -67,8 +79,11 @@ title: [unclosed
 Body.
 `
 
-    expect(() => renderMarkdownMirror(raw)).not.toThrow()
-    expect(renderMarkdownMirror(raw)).toContain('Body.')
+    expect(() => renderMarkdownMirror(raw, ORIGIN)).not.toThrow()
+    expect(renderMarkdownMirror(raw, ORIGIN)).toContain('Body.')
+    expect(renderMarkdownMirror(raw, ORIGIN)).toContain(
+      '> For the full documentation index, see [llms.txt](https://docs.example.com/llms.txt).',
+    )
   })
 })
 

@@ -16,7 +16,8 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ slug: string[] }> },
 ) {
-  const cloud = await getCloudSiteConfig(new URL(request.url).origin)
+  const origin = new URL(request.url).origin
+  const cloud = await getCloudSiteConfig(origin)
   if (!isMarkdownPagesEnabled(cloud?.siteConfig.portable)) {
     return new NextResponse('Not Found', { status: 404 })
   }
@@ -81,7 +82,7 @@ export async function GET(
       }
       // One serializer for the `.md` mirror and the negotiated markdown. The
       // public frontmatter is limited to title and description.
-      return new NextResponse(renderMarkdownMirror(file.content), {
+      return new NextResponse(renderMarkdownMirror(file.content, origin), {
         status: 200,
         headers: {
           'Content-Type': 'text/markdown; charset=utf-8',

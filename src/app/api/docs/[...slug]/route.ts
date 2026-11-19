@@ -255,7 +255,7 @@ export async function GET(
   for (const filePath of markdownMirrorCandidates(mirrorId)) {
     const file = await source.read(filePath)
     if (!file) continue
-    return new Response(renderMarkdownMirror(file.content), {
+    return new Response(renderMarkdownMirror(file.content, baseUrl), {
       headers: {
         ...commonHeaders,
         'Content-Type': 'text/markdown; charset=utf-8',
